@@ -3,14 +3,23 @@
         <title>Dynamic Changes in Foot Morphology During Gait</title>
     </head>
     <body>
+        <script src="https://unpkg.com/d3@5.16.0/dist/d3.js"></script>
         <script type="module">
         import * as THREE from "https://unpkg.com/three@0.118.3/build/three.module.js";
         import {GLTFLoader} from "https://unpkg.com/three@0.118.3/examples/jsm/loaders/GLTFLoader.js"
         import { OrbitControls } from "https://unpkg.com/three@0.118.3/examples/jsm/controls/OrbitControls.js";
-        var container, camera,scene,renderer;
+        import { GUI } from "https://unpkg.com/three@0.118.3/examples/jsm/libs/dat.gui.module.js";
+        
+        
+        var container, camera,scene,renderer, template, preds, oldPreds;
+        
+        
+
         init();
         animate();
+        THREE.Cache.enabled = true;
 
+   
         function init(){
             container=document.createElement('div');
             document.body.appendChild(container);
@@ -33,19 +42,84 @@
             var loader = new GLTFLoader();
 
             loader.load("wiamanPredFoot.glb", function ( gtlf ) {
-                var template= gtlf.scene.children[0]
+                template= gtlf.scene.children[0]
                 
-                scene.add( template );
+                scene.add( template )
+                //console.log(template.geometry.attributes.position.array) #array is a 1d flattened array of all vertices, should be easy to update with PC inverse transform
+           
             });
 
+            var gui = new GUI({width: 420});
+            // var loader2 = new THREE.FileLoader();
+            // var params2=loader2.load('predictors.json',function(data){
+            //     console.log(JSON.parse(data));
+            //     return JSON.parse(data);});
+
+            var pred = gui.addFolder('Predictors');
+            pred.open()
+            // var labels=JSON.parse(predAll)['labels']
+            // var preds = JSON.parse(predAll)['mean']
+            // var mins = JSON.parse(predAll)['min']
+            // var max = JSON.parse(predAll)['max']
+            // for (var index=0; index<labels.length;index++){
+            //     var label=labels[index];
+            //     pred.add(preds, label,mins[label],max[label]);}
+            // console.log(pred.StancePhase)
+            d3.json("predictors.json").then(function(data){ 
+            var pretty=JSON.parse(data)['pretty']
+            var labels=JSON.parse(data)['labels']
+            preds = JSON.parse(data)['mean']
+            var mins = JSON.parse(data)['min']
+            var max = JSON.parse(data)['max']
+            
+            oldPreds=JSON.parse(JSON.stringify(preds)); //deep copies oldPreds
+            for (var index=0; index<labels.length;index++){
+                var label=labels[index];
+                var pret =pretty[index];
+                
+                pred.add(preds, label,mins[label],max[label]).name(pret);}
+                
+            
+            });
+            
+
+
+            //
             renderer = new THREE.WebGLRenderer();
             renderer.setPixelRatio( window.devicePixelRatio );
             renderer.setSize( window.innerWidth, window.innerHeight );
             container.appendChild( renderer.domElement );
             var controls = new OrbitControls( camera, renderer.domElement );
             window.addEventListener( 'resize', onWindowResize, false );
+            
         }
         //
+        function isEquivalent(a, b) { //from http://adripofjavascript.com/blog/drips/object-equality-in-javascript.html
+            // Create arrays of property names
+            var aProps = Object.keys(a);
+            var bProps = Object.keys(b);
+
+            // If number of properties is different,
+            // objects are not equivalent
+            if (aProps.length != bProps.length) {
+                return false;
+            }
+
+            for (var i = 0; i < aProps.length; i++) {
+                var propName = aProps[i];
+
+                // If values of same property are not equal,
+                // objects are not equivalent
+                if (a[propName] !== b[propName]) {
+                    return false;
+                }
+            }
+
+            // If we made it this far, objects
+            // are considered equivalent
+            return true;
+        }
+        
         function onWindowResize() {
 
             camera.aspect = window.innerWidth / window.innerHeight;
@@ -55,6 +129,17 @@
 
         }
         function animate() {
+            if ( template ) template.rotation.y += 0.001;
+            
+            if (preds && oldPreds){
+                ; 
+                if (!(isEquivalent(oldPreds,preds))){
+                    console.log('predictors changed')
+                };
+                oldPreds=JSON.parse(JSON.stringify(preds)); //deep copies oldPreds
+            };
+            
+
 
             requestAnimationFrame( animate );
             render();
