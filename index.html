@@ -3,10 +3,12 @@
         <title>Dynamic Changes in Foot Morphology During Gait</title>
     </head>
     <body>
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
         <script src="https://unpkg.com/d3@5.16.0/dist/d3.js"></script>
         <script type="module">
         import * as THREE from "https://unpkg.com/three@0.118.3/build/three.module.js";
-        import {GLTFLoader} from "https://unpkg.com/three@0.118.3/examples/jsm/loaders/GLTFLoader.js"
+        //import {GLTFLoader} from "https://unpkg.com/three@0.118.3/examples/jsm/loaders/GLTFLoader.js"
+        import { PLYLoader } from "https://unpkg.com/three@0.118.3/examples/jsm/loaders/PLYLoader.js"
         import { OrbitControls } from "https://unpkg.com/three@0.118.3/examples/jsm/controls/OrbitControls.js";
         import { GUI } from "https://unpkg.com/three@0.118.3/examples/jsm/libs/dat.gui.module.js";
         
@@ -37,17 +39,36 @@
             var pointLight = new THREE.PointLight( 0xffffff, 0.8 );
             camera.add( pointLight );
             scene.add( camera );
-                
 
-            var loader = new GLTFLoader();
+            
+            
 
-            loader.load("wiamanPredFoot.glb", function ( gtlf ) {
-                template= gtlf.scene.children[0]
-                
-                scene.add( template )
-                //console.log(template.geometry.attributes.position.array) #array is a 1d flattened array of all vertices, should be easy to update with PC inverse transform
-           
+            var loader = new PLYLoader();
+            loader.load("wiamanPredFoot_cut6.ply",function(geometry){
+                geometry.computeFaceNormals();
+                geometry.computeVertexNormals();
+                var material = new THREE.MeshStandardMaterial({
+                    color: 0xffffff,
+                    flatShading: true,
+                    side:THREE.DoubleSide,
+                    vertexColors: THREE.FaceColors,
+                    roughness: 0.32,
+                    
+                });
+                template = new THREE.Mesh(geometry,material)
+                scene.add(template);
+                console.log(template.geometry.attributes.position.array)
             });
+
+            // var loader = new GLTFLoader();
+
+            // loader.load("wiamanPredFoot.glb", function ( gtlf ) {
+            //     template= gtlf.scene.children[0]
+                
+            //     scene.add( template )
+            //     //console.log(template.geometry.attributes.position.array) #array is a 1d flattened array of all vertices, should be easy to update with PC inverse transform
+           
+            // });
 
             var gui = new GUI({width: 420});
             
@@ -124,6 +145,8 @@
                 ; 
                 if (!(isEquivalent(oldPreds,preds))){
                     console.log('predictors changed')
+                    console.log(template.geometry.attributes.position.array)
+                    //postData()
                 };
                 oldPreds=JSON.parse(JSON.stringify(preds)); //deep copies oldPreds
             };
@@ -134,7 +157,20 @@
             render();
 
         }
-        
+        function postData() {
+            $.ajax({
+                type: "POST",
+                url: "/pred.py",
+                data: {'test':1},
+                success: callbackFunc
+            });
+        }
+
+        function callbackFunc(response) {
+            // do something with the response
+            console.log(response);
+        }
+
         function render() {
 
             
