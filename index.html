@@ -5,6 +5,7 @@
     <body>
         <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
         <script src="https://unpkg.com/d3@5.16.0/dist/d3.js"></script>
+        <script src="https://unpkg.com/mathjs@8.1.1/lib/browser/math.js" type="text/javascript"></script>
         <script type="module">
         import * as THREE from "https://unpkg.com/three@0.118.3/build/three.module.js";
         //import {GLTFLoader} from "https://unpkg.com/three@0.118.3/examples/jsm/loaders/GLTFLoader.js"
@@ -12,8 +13,7 @@
         import { OrbitControls } from "https://unpkg.com/three@0.118.3/examples/jsm/controls/OrbitControls.js";
         import { GUI } from "https://unpkg.com/three@0.118.3/examples/jsm/libs/dat.gui.module.js";
         
-        
-        var container, camera,scene,renderer, template, preds, oldPreds;
+        var container, camera,scene,renderer, template, preds, oldPreds, modelParameters, PCA_components, vertices;
         
         
 
@@ -23,6 +23,21 @@
 
    
         function init(){
+
+            d3.json("dynafoot_Inputs.json").then(function(data){
+                modelParameters = data;
+            })
+
+            d3.text("PCAcomponents.csv").then(function(data){
+                PCA_components=d3.csvParseRows(data).map(function(row) {
+                    return row.map(function(value) {
+                    return +value;
+                    });
+                });
+
+            })
+            
+
             container=document.createElement('div');
             document.body.appendChild(container);
             scene = new THREE.Scene();
@@ -57,7 +72,10 @@
                 });
                 template = new THREE.Mesh(geometry,material)
                 scene.add(template);
+                template.geometry.attributes.position.needsUpdate = true;
                 console.log(template.geometry.attributes.position.array)
+                vertices = template.geometry.attributes.position.array;
+
             });
 
             // var loader = new GLTFLoader();
@@ -81,6 +99,8 @@
             preds = JSON.parse(data)['mean']
             var mins = JSON.parse(data)['min']
             var max = JSON.parse(data)['max']
+
+            
             
             oldPreds=JSON.parse(JSON.stringify(preds)); //deep copies oldPreds
             for (var index=0; index<labels.length;index++){
@@ -91,6 +111,7 @@
                 
             
             });
+
             
 
 
@@ -139,14 +160,13 @@
 
         }
         function animate() {
-            if ( template ) template.rotation.y += 0.001;
+            //if ( template ) template.rotation.y += 0.001;
             
             if (preds && oldPreds){
                 ; 
                 if (!(isEquivalent(oldPreds,preds))){
                     console.log('predictors changed')
-                    console.log(template.geometry.attributes.position.array)
-                    //postData()
+                    calculateNewVertices(preds)
                 };
                 oldPreds=JSON.parse(JSON.stringify(preds)); //deep copies oldPreds
             };
@@ -157,18 +177,57 @@
             render();
 
         }
-        function postData() {
-            $.ajax({
-                type: "POST",
-                url: "/pred.py",
-                data: {'test':1},
-                success: callbackFunc
-            });
-        }
+        function calculateNewVertices(pred){
+            var X_in = Object.values(pred)
+            X_in.splice(0,1)
+            var Xin = new Array(9);
+            var yOut = new Array(8);
 
-        function callbackFunc(response) {
-            // do something with the response
-            console.log(response);
+            var n=0;
+            for (n in X_in) {
+                var i = X_in[n]
+                
+                var lmbda = modelParameters.X_lambdas[n]
+                if (i < 0){
+                    var transformed = -(Math.pow(-i+1,2-lmbda)-1) / (2-lmbda)
+                } else{
+                    var transformed = (Math.pow(i+1, lmbda)-1) / lmbda
+                }
+                
+                var normalized = (transformed - modelParameters.X_means[n])/modelParameters.X_scales[n]
+                Xin[n] = normalized
+                
+            }
+
+            var PC=0;
+
+            for (PC=0; PC<8; PC++){
+                var coef = JSON.parse(JSON.stringify(modelParameters.coefs[PC]))
+                coef.splice(-1,1)
+                var sum = Xin.map((v,i) => v * coef[i]).reduce((x, y) => x + y, 0)
+                var y = (sum+modelParameters.intercepts[PC])*modelParameters.y_scales[PC]+modelParameters.y_means[PC]
+                var lmbda = modelParameters.y_lambdas[PC]
+                if (y>0){
+                    y = Math.pow(y*lmbda + 1, 1/lmbda)-1
+                } else{
+                    y = 1 - Math.pow(-(2-lmbda)*y+1,1/(2-lmbda))
+                }
+                yOut[PC]=y
+            }
+
+            console.log(X_in)
+            console.log(yOut)
+            //yOut = math.matrix(yOut);
+            var PCmean = PCA_components[8];
+            var PCcomps = PCA_components.slice(0,8);
+            var verticesFlat = math.add(math.multiply([yOut],PCcomps), [PCmean]);
+            var verticesArr = new Float32Array(verticesFlat[0])
+            console.log(verticesArr)
+            
+            vertices.forEach((val, index) => vertices[index] = verticesArr[index]);
+            template.geometry.attributes.position.needsUpdate=true;
+            
+            
         }
 
         function render() {
@@ -179,6 +238,9 @@
             renderer.render( scene, camera );
 
         }
+
+
+
         </script>
     </body>
 
