@@ -1,247 +1,54 @@
+<!DOCTYPE HTML>
 <html>
     <head>
-        <title>Dynamic Changes in Foot Morphology During Gait</title>
+        <title>Dynamic Foot Morphology Tool</title>
+        <link rel="stylesheet" type="text/css" href="main.css">
     </head>
     <body>
-        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
-        <script src="https://unpkg.com/d3@5.16.0/dist/d3.js"></script>
-        <script src="https://unpkg.com/mathjs@8.1.1/lib/browser/math.js" type="text/javascript"></script>
-        <script type="module">
-        import * as THREE from "https://unpkg.com/three@0.118.3/build/three.module.js";
-        //import {GLTFLoader} from "https://unpkg.com/three@0.118.3/examples/jsm/loaders/GLTFLoader.js"
-        import { PLYLoader } from "https://unpkg.com/three@0.118.3/examples/jsm/loaders/PLYLoader.js"
-        import { OrbitControls } from "https://unpkg.com/three@0.118.3/examples/jsm/controls/OrbitControls.js";
-        import { GUI } from "https://unpkg.com/three@0.118.3/examples/jsm/libs/dat.gui.module.js";
+        <div id="panel">
+            <div id="header"><h1>Dynamic Foot Shape Predictive Model</h1></div>
+            
+            <p>
+            Explore how anthropometric and kinematic variables vary foot shape during the stance phase of gait by sliding the controls on the right, or typing in values! 
+            </p>
+            
+            <p>
+            The model was developed by taking 4D scans of 30 subjects (15M/15F) walking on a treadmill at 1.4 m/s.
+            Scans were collected using a custom system with 6 Intel RealSense cameras, with details presented in <a href=https://joss.theoj.org/papers/10.21105/joss.01466 target="_blank" rel="noopener noreferrer"> this paper</a>.
+            The model can predict foot shape with an accuracy of 5.2  &#177; 2.0 mm. 
+            Details on model development are presented in <a href=https://arxiv.org/abs/2007.11077 target="_blank" rel="noopener noreferrer"> this preprint</a>. 
+            </p>
+
+            <p>
+            This model was developed by Abhishektha Boppana and Dr. Allison Anderson from the University of Colorado Boulder's Bioastronautics Research Group. 
+            The model will be used to develop better fitting planetary exploration spacesuit boots. 
+            </p>            
+
+            <p>
+            We would especially like to thank Dr. Matthew Reed and Dr. Daniel Park from the University of Michigan Transportation Research Institute for providing a template foot for this model and guidance on creating this web-based tool. 
+            Check out their body shape modeling tools <a href=http://humanshape.org/ target="_blank" rel="noopener noreferrer"> here!</a> 
+            </p>
+
+
+            <p>
+            To report any issues or suggestions with this tool, please open a Github issue in <a href="https://github.com/anderson-cu-bioastronautics/footmodel_viewer" target="_blank" rel="noopener noreferrer"> our repository</a>. 
+            </p>
+
+            
+            <p>
+            See more projects from our research group and learn more about our research <a href=https://www.colorado.edu/faculty/anderson/research-projects target="_blank" rel="noopener noreferrer"> here</a>.
+            </p>
+
         
-        var container, camera,scene,renderer, template, preds, oldPreds, modelParameters, PCA_components, vertices;
+        </div>
         
-        
-
-        init();
-        animate();
-        THREE.Cache.enabled = true;
-
-   
-        function init(){
-
-            d3.json("dynafoot_Inputs.json").then(function(data){
-                modelParameters = data;
-            })
-
-            d3.text("PCAcomponents.csv").then(function(data){
-                PCA_components=d3.csvParseRows(data).map(function(row) {
-                    return row.map(function(value) {
-                    return +value;
-                    });
-                });
-
-            })
-            
-
-            container=document.createElement('div');
-            document.body.appendChild(container);
-            scene = new THREE.Scene();
-            camera = new THREE.PerspectiveCamera( 50, window.innerWidth / window.innerHeight, 0.01, 1000000 );
-            
-            camera.position.z=300;
-            camera.position.y=300;
-            camera.position.x=300;
-            
-
-            var ambientLight = new THREE.AmbientLight( 0xcccccc, 0.4 );
-            scene.add( ambientLight );
-
-            var pointLight = new THREE.PointLight( 0xffffff, 0.8 );
-            camera.add( pointLight );
-            scene.add( camera );
-
-            
-            
-
-            var loader = new PLYLoader();
-            loader.load("wiamanPredFoot_cut6.ply",function(geometry){
-                geometry.computeFaceNormals();
-                geometry.computeVertexNormals();
-                var material = new THREE.MeshStandardMaterial({
-                    color: 0xffffff,
-                    flatShading: true,
-                    side:THREE.DoubleSide,
-                    vertexColors: THREE.FaceColors,
-                    roughness: 0.32,
-                    
-                });
-                template = new THREE.Mesh(geometry,material)
-                scene.add(template);
-                template.geometry.attributes.position.needsUpdate = true;
-                console.log(template.geometry.attributes.position.array)
-                vertices = template.geometry.attributes.position.array;
-
-            });
-
-            // var loader = new GLTFLoader();
-
-            // loader.load("wiamanPredFoot.glb", function ( gtlf ) {
-            //     template= gtlf.scene.children[0]
-                
-            //     scene.add( template )
-            //     //console.log(template.geometry.attributes.position.array) #array is a 1d flattened array of all vertices, should be easy to update with PC inverse transform
-           
-            // });
-
-            var gui = new GUI({width: 420});
-            
-            var pred = gui.addFolder('Predictors');
-            pred.open()
-            
-            d3.json("predictors.json").then(function(data){ 
-            var pretty=JSON.parse(data)['pretty']
-            var labels=JSON.parse(data)['labels']
-            preds = JSON.parse(data)['mean']
-            var mins = JSON.parse(data)['min']
-            var max = JSON.parse(data)['max']
-
-            
-            
-            oldPreds=JSON.parse(JSON.stringify(preds)); //deep copies oldPreds
-            for (var index=0; index<labels.length;index++){
-                var label=labels[index];
-                var pret =pretty[index];
-                
-                pred.add(preds, label,mins[label],max[label]).name(pret);}
-                
-            
-            });
-
-            
-
-
-            //
-            renderer = new THREE.WebGLRenderer();
-            renderer.setPixelRatio( window.devicePixelRatio );
-            renderer.setSize( window.innerWidth, window.innerHeight );
-            container.appendChild( renderer.domElement );
-            var controls = new OrbitControls( camera, renderer.domElement );
-            window.addEventListener( 'resize', onWindowResize, false );
-            
-        }
-        //
-        function isEquivalent(a, b) { //from http://adripofjavascript.com/blog/drips/object-equality-in-javascript.html
-            // Create arrays of property names
-            var aProps = Object.keys(a);
-            var bProps = Object.keys(b);
-
-            // If number of properties is different,
-            // objects are not equivalent
-            if (aProps.length != bProps.length) {
-                return false;
-            }
-
-            for (var i = 0; i < aProps.length; i++) {
-                var propName = aProps[i];
-
-                // If values of same property are not equal,
-                // objects are not equivalent
-                if (a[propName] !== b[propName]) {
-                    return false;
-                }
-            }
-
-            // If we made it this far, objects
-            // are considered equivalent
-            return true;
-        }
-        
-        function onWindowResize() {
-
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-
-            renderer.setSize( window.innerWidth, window.innerHeight );
-
-        }
-        function animate() {
-            //if ( template ) template.rotation.y += 0.001;
-            
-            if (preds && oldPreds){
-                ; 
-                if (!(isEquivalent(oldPreds,preds))){
-                    console.log('predictors changed')
-                    calculateNewVertices(preds)
-                };
-                oldPreds=JSON.parse(JSON.stringify(preds)); //deep copies oldPreds
-            };
-            
-
-
-            requestAnimationFrame( animate );
-            render();
-
-        }
-        function calculateNewVertices(pred){
-            var X_in = Object.values(pred)
-            X_in.splice(0,1)
-            var Xin = new Array(9);
-            var yOut = new Array(8);
-
-            var n=0;
-            for (n in X_in) {
-                var i = X_in[n]
-                
-                var lmbda = modelParameters.X_lambdas[n]
-                if (i < 0){
-                    var transformed = -(Math.pow(-i+1,2-lmbda)-1) / (2-lmbda)
-                } else{
-                    var transformed = (Math.pow(i+1, lmbda)-1) / lmbda
-                }
-                
-                var normalized = (transformed - modelParameters.X_means[n])/modelParameters.X_scales[n]
-                Xin[n] = normalized
-                
-            }
-
-            var PC=0;
-
-            for (PC=0; PC<8; PC++){
-                var coef = JSON.parse(JSON.stringify(modelParameters.coefs[PC]))
-                coef.splice(-1,1)
-                var sum = Xin.map((v,i) => v * coef[i]).reduce((x, y) => x + y, 0)
-                var y = (sum+modelParameters.intercepts[PC])*modelParameters.y_scales[PC]+modelParameters.y_means[PC]
-                var lmbda = modelParameters.y_lambdas[PC]
-                if (y>0){
-                    y = Math.pow(y*lmbda + 1, 1/lmbda)-1
-                } else{
-                    y = 1 - Math.pow(-(2-lmbda)*y+1,1/(2-lmbda))
-                }
-                yOut[PC]=y
-            }
-
-            console.log(X_in)
-            console.log(yOut)
-            //yOut = math.matrix(yOut);
-            var PCmean = PCA_components[8];
-            var PCcomps = PCA_components.slice(0,8);
-            var verticesFlat = math.add(math.multiply([yOut],PCcomps), [PCmean]);
-            var verticesArr = new Float32Array(verticesFlat[0])
-            console.log(verticesArr)
-            
-            vertices.forEach((val, index) => vertices[index] = verticesArr[index]);
-            template.geometry.attributes.position.needsUpdate=true;
-            
-            
-        }
-
-        function render() {
-
-            
-            
-
-            renderer.render( scene, camera );
-
-        }
-
-
-
+        <iframe src="footViewer.html" id="viewer" name="viewer" allowfullscreen allowvr onmousewheel=""></iframe>
+    
+        <script>
+            const viewer = document.getElementById( 'viewer' );
+            viewer.style.width = getComputedStyle( viewer ).width;
+            viewer.style.height = getComputedStyle( viewer ).height;
+            viewer.setAttribute( 'scrolling', 'no' );
         </script>
     </body>
-
 </html>
