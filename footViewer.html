@@ -21,7 +21,7 @@
         import { OrbitControls } from "https://unpkg.com/three@0.118.3/examples/jsm/controls/OrbitControls.js";
         import { GUI } from "https://unpkg.com/three@0.118.3/examples/jsm/libs/dat.gui.module.js";
         
-        var container, camera,scene,renderer, template, preds, oldPreds, modelParameters, PCA_components, vertices;
+        var container, camera,scene,renderer, template, preds, oldPreds, modelParameters, gaitmodelParameters, PCA_components, vertices, predPanel;
         
         
 
@@ -34,6 +34,10 @@
 
             d3.json("dynafoot_Inputs.json").then(function(data){
                 modelParameters = data;
+            })
+
+            d3.json("dynafoot_stanceInputs.json").then(function(data){
+                gaitmodelParameters = data;
             })
 
             d3.text("PCAcomponents.csv").then(function(data){
@@ -98,8 +102,8 @@
 
             var gui = new GUI({width: 420});
             
-            var pred = gui.addFolder('Predictors');
-            pred.open()
+            predPanel = gui.addFolder('Predictors');
+            predPanel.open()
             
             d3.json("predictors.json").then(function(data){ 
             var pretty=JSON.parse(data)['pretty']
@@ -115,7 +119,7 @@
                 var label=labels[index];
                 var pret =pretty[index];
                 
-                pred.add(preds, label,mins[label],max[label]).name(pret);}
+                predPanel.add(preds, label,mins[label],max[label]).name(pret);}
                 
             
             });
@@ -174,7 +178,7 @@
                 ; 
                 if (!(isEquivalent(oldPreds,preds))){
                     console.log('predictors changed')
-                    calculateNewVertices(preds)
+                    calculateNewVertices(oldPreds, preds)
                 };
                 oldPreds=JSON.parse(JSON.stringify(preds)); //deep copies oldPreds
             };
@@ -185,9 +189,40 @@
             render();
 
         }
-        function calculateNewVertices(pred){
+        function calculateNewVertices(oldPred, pred){
             var X_in = Object.values(pred)
-            X_in.splice(0,1)
+            //First find out if the stance phase variable changed
+            if (oldPred['StancePhase']!=pred['StancePhase']){
+                var numRegressors = gaitmodelParameters.bin_edges.length;
+                var stance = [pred['StancePhase']];
+                for (var e=0; e<numRegressors; e++){
+                    if ((stance >= gaitmodelParameters.bin_edges[e+1]) && (stance < gaitmodelParameters.bin_edges[e])){
+                        var kineOut = gaitmodelParameters.coefs[e].map(function(ele){ return ele*stance})
+                        kineOut = math.add(kineOut, gaitmodelParameters.intercepts[e])
+                        console.log(stance, kineOut )
+
+                    }
+                }
+
+                //var yOut = new Array(kineOut.length)
+                for (var yi=0; yi<kineOut.length; yi++){
+                    var y = kineOut[yi]*gaitmodelParameters.y_scales[yi]+gaitmodelParameters.y_means[yi]
+                    var lmbda = gaitmodelParameters.y_lambdas[yi]
+                    if (y>0){
+                        y = Math.pow(y*lmbda + 1, 1/lmbda)-1
+                    } else{
+                        y = 1 - Math.pow(-(2-lmbda)*y+1,1/(2-lmbda))
+                    }
+                    X_in[yi+1] = y
+                    
+                }
+            }
+
+            
+
+            //Do prediction with all predictors
+            
+            X_in.splice(0,1) //Remove stance input
             var Xin = new Array(9);
             var yOut = new Array(8);
 
@@ -223,14 +258,14 @@
                 yOut[PC]=y
             }
 
-            console.log(X_in)
-            console.log(yOut)
+            //console.log(X_in)
+            //console.log(yOut)
             //yOut = math.matrix(yOut);
             var PCmean = PCA_components[8];
             var PCcomps = PCA_components.slice(0,8);
             var verticesFlat = math.add(math.multiply([yOut],PCcomps), [PCmean]);
             var verticesArr = new Float32Array(verticesFlat[0])
-            console.log(verticesArr)
+            //console.log(verticesArr)
             
             vertices.forEach((val, index) => vertices[index] = verticesArr[index]);
             template.geometry.attributes.position.needsUpdate=true;
