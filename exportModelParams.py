@@ -1,4 +1,3 @@
-import sklearn
 import pickle
 import pandas as pd
 import numpy as np
@@ -33,3 +32,27 @@ pipelineExports = {'X_means': X_means.tolist(),
                    'intercepts': intercepts.tolist()}
 with open("dynafoot_Inputs.json", "w") as f:  
     json.dump(pipelineExports, f) 
+
+
+with open('GaitPredictor.pickle', 'rb') as f: 
+    gait_pipeline = pickle.load(f)
+edges = np.flip(gait_pipeline[0].binner_.bin_edges_[0])
+edges[0]=1 #just to ensure full range of stance phase slider can be selected
+
+numRegressors = len(edges)-1
+gait_coefs = np.asarray([gait_pipeline[0].estimators_[i].coef_.T[0] for i in range(0,numRegressors)])
+gait_intercepts = np.asarray([gait_pipeline[0].estimators_[i].intercept_ for i in range(0,numRegressors)])
+gait_y_means = pipeline[1]._scaler.mean_
+gait_y_scales =pipeline[1]._scaler.scale_
+gait_y_lambdas = pipeline[1].lambdas_
+
+gait_pipelineExports = {'bin_edges': edges.tolist(),
+                   'coefs': gait_coefs.tolist(),
+                   'intercepts': gait_intercepts.tolist(),
+                   'y_means': gait_y_means.tolist(),
+                   'y_scales': gait_y_scales.tolist(),
+                   'y_lambdas': gait_y_lambdas.tolist()}
+
+with open("dynafoot_stanceInputs.json", "w") as f:  
+    json.dump(gait_pipelineExports, f) 
+
