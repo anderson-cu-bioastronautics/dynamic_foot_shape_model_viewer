@@ -199,7 +199,7 @@
                     if ((stance >= gaitmodelParameters.bin_edges[e+1]) && (stance < gaitmodelParameters.bin_edges[e])){
                         var kineOut = gaitmodelParameters.coefs[e].map(function(ele){ return ele*stance})
                         kineOut = math.add(kineOut, gaitmodelParameters.intercepts[e])
-                        console.log(stance, kineOut )
+                        //console.log(stance, kineOut )
 
                     }
                 }
@@ -214,8 +214,11 @@
                         y = 1 - Math.pow(-(2-lmbda)*y+1,1/(2-lmbda))
                     }
                     X_in[yi+1] = y
+                    predPanel.__controllers[yi+1].setValue(y)
                     
                 }
+
+                
             }
 
             
